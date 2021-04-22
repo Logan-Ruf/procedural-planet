@@ -23,13 +23,34 @@
 
     const geometry = SS.spheremap.Sphere()
 
-    const material = new THREE.MeshBasicMaterial({
-        color: 0xFF0000,    // red (can also use a CSS color string here)
-    });
+    const loader = new THREE.TextureLoader();
+    const texture = loader.load('assets/flower-1.jpg');
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.magFilter = THREE.NearestFilter;
+    const repeats = 1;
+    texture.repeat.set(repeats, repeats);
 
-    const mesh = new THREE.Mesh(geometry, material)
+    const materials = [
+        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-1.jpg')}),
+        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-2.jpg')}),
+        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-3.jpg')}),
+        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-4.jpg')}),
+        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-5.jpg')}),
+        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-6.jpg')}),
+    ]
+
+    // const material = new THREE.MeshLambertMaterial({
+    //     color: 0xFF0000,    // red (can also use a CSS color string here)
+    // });
+
+    const mesh = new THREE.Mesh(geometry, materials)
 
     scene.add( mesh )
+
+    const light = new THREE.HemisphereLight(0xFFFFFF, 0x444444, 1)
+
+    scene.add(light)
 
     // const wireframe = new THREE.WireframeGeometry( geometry );
     //
