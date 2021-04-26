@@ -12,6 +12,7 @@
 <!--<script type="module" src="./build/orbitcontrols.js"></script>-->
 <script type="module" src="./js/spheremap.js"></script>
 <script type="module" src="./js/utils.js"></script>
+<script type="module" src="./custom/geometry_warp.js"></script>
 <script type="module">
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
@@ -21,7 +22,8 @@
     renderer.setSize( window.innerWidth, window.innerHeight );
     document.body.appendChild( renderer.domElement );
 
-    const geometry = SS.spheremap.Sphere()
+    const geometry = SS.warp.geometry_warp(SS.spheremap.Sphere(1.5))
+
 
     const loader = new THREE.TextureLoader();
     const texture = loader.load('assets/flower-1.jpg');
@@ -31,44 +33,90 @@
     const repeats = 1;
     texture.repeat.set(repeats, repeats);
 
-    const materials = [
-        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-1.jpg')}),
-        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-2.jpg')}),
-        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-3.jpg')}),
-        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-4.jpg')}),
-        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-5.jpg')}),
-        new THREE.MeshLambertMaterial({map: loader.load('assets/flower-6.jpg')}),
-    ]
+    const fragmentShader = `
+  #include <common>
 
-    // const material = new THREE.MeshLambertMaterial({
-    //     color: 0xFF0000,    // red (can also use a CSS color string here)
+  uniform vec3 iResolution;
+  uniform float iTime;
+
+  // By iq: https://www.shadertoy.com/user/iq
+  // license: Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+  void mainImage( out vec4 fragColor, in vec2 fragCoord )
+  {
+      // Normalized pixel coordinates (from 0 to 1)
+      vec2 uv = fragCoord/iResolution.xy;
+
+      // Time varying pixel color
+      vec3 col = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));
+
+      // Output to screen
+      fragColor = vec4(col,1.0);
+  }
+
+  void main() {
+    mainImage(gl_FragColor, gl_FragCoord.xy);
+  }
+  `
+
+    const vertexShader = `
+    #include <common>
+    varying vec3 vUv;
+
+    void main() {
+      vUv = position;
+
+      vec4 modelViewPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * modelViewPosition;
+    }
+    `
+
+    const uniforms = {
+        iTime: { value: 0 },
+        iResolution:  { value: new THREE.Vector3() },
+    };
+    // const material = new THREE.ShaderMaterial({
+    //     vertexShader: vertexShader,
+    //     fragmentShader: fragmentShader,
+    //     uniforms: uniforms,
     // });
 
-    const mesh = new THREE.Mesh(geometry, materials)
+    const material = new THREE.MeshLambertMaterial({
+        color: 0xFF0000,    // red (can also use a CSS color string here)
+    });
 
-    scene.add( mesh )
+    const mesh = new THREE.Mesh(geometry, material)
+
+    // scene.add( mesh )
 
     const light = new THREE.HemisphereLight(0xFFFFFF, 0x444444, 1)
 
     scene.add(light)
 
-    // const wireframe = new THREE.WireframeGeometry( geometry );
-    //
-    // const line = new THREE.LineSegments( wireframe );
-    // line.material.depthTest = false;
-    // line.material.opacity = 0.25;
-    // line.material.transparent = true;
-    //
-    // scene.add( line );
+    const wireframe = new THREE.WireframeGeometry( geometry );
+
+    const line = new THREE.LineSegments( wireframe );
+    line.material.depthTest = false;
+    line.material.opacity = 0.25;
+    line.material.transparent = true;
+
+    scene.add( line );
 
 
 
 
-    function animate() {
-        requestAnimationFrame( animate );
+
+    function animate(time) {
+        time *= 0.001
+
+        line.rotation.x += 0.001;
+        line.rotation.y += 0.001;
+
+        const canvas = renderer.domElement;
+        uniforms.iResolution.value.set(canvas.width, canvas.height, 1);
+        uniforms.iTime.value = time;
+
         renderer.render( scene, camera );
-        mesh.rotation.x += 0.001;
-        mesh.rotation.y += 0.001;
+        requestAnimationFrame( animate );
     }
     animate();
 </script>
