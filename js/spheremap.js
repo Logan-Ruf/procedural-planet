@@ -9,7 +9,7 @@ SS.spheremap.Sphere = function(radius) {
 
     radius = radius || 1;
 
-    var geometry = new THREE.BoxGeometry(1, 1, 1, 32, 32, 32);
+    var geometry = new THREE.BoxGeometry(1, 1, 1, 64, 64, 64);
 
     const position = geometry.attributes.position
     const vertex = new THREE.Vector3();

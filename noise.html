@@ -1,0 +1,119 @@
+<script src="js/gl_utils.js"></script>
+
+<body bgcolor=black>
+<canvas style="color:#87CEEB" id='canvas1' width='600' height='600'>
+</canvas>
+<canvas style="color:#87CEEB" id='canvas2' width='600' height='600'>
+</canvas>
+<br>
+<canvas style="color:#87CEEB" id='canvas3' width='600' height='600'>
+</canvas>
+<canvas style="color:#87CEEB" id='canvas4' width='600' height='600'>
+</canvas>
+</body>
+
+<script id="vs" type="x-shader/x-vertex">
+    attribute vec3 aPosition;
+    varying   vec3 vPosition;
+    void main() {
+        gl_Position = vec4(aPosition, 1.0);
+        vPosition = aPosition;
+    }
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+    precision highp float;
+    uniform float uTime;
+    varying vec3 vPosition;
+    uniform vec3 uCursor;
+
+    #define OCTAVES 8
+    #define FREQUENCY 3.
+    #define LACUNAIRTY 4.
+
+    vec2 randomGradient(in vec2 point) {
+        // Random float. No precomputed gradients mean this works for any number of grid coordinates
+        float random = uTime * sin(point.x * 21942. + point.y * 171324. + 8912.) * cos(point.x * 23157. * point.y * 217832. + 9758.);
+        return vec2(cos(random), sin(random));
+    }
+
+    // Computes the dot product of the distance and gradient vectors.
+    float dotGridGradient(vec2 point, vec2 st) {
+        // Get gradient from integer coordinates
+        vec2 gradient = randomGradient(point);
+
+        return dot(gradient, st);
+    }
+
+    // Based on Morgan McGuire @morgan3d
+    // https://www.shadertoy.com/view/4dS3Wd
+    float noise (in vec2 st, in float frequency) {
+        vec2 offset = st + FREQUENCY * 2.;
+        return sin(offset.x * offset.y * FREQUENCY + uTime);
+    }
+
+    float perlin (in vec2 st, in float freq) {
+        // a b <--- Point Layout
+        // c d
+        vec2 a = floor(st * freq);
+        vec2 d = a + vec2(1, 1);
+        vec2 b = a + vec2(1, 0);
+        vec2 c = a + vec2(0, 1);
+        if(a.x == -1. * freq) {
+            a.x = freq;
+            c.x = freq;
+        }
+
+        vec2 distance = fract(st * freq);
+
+        vec2 offset = vec2(freq);
+        float an = dotGridGradient(a, st);
+        float bn = dotGridGradient(b, st);
+        float x1 = mix(an, bn, distance.x);
+
+        float cn = dotGridGradient(c, st);
+        float dn = dotGridGradient(d, st);
+        float x2 = mix(cn, dn, distance.x);
+
+        return mix(x1, x2, distance.y);
+    }
+
+    float fbm (in vec2 st) {
+        // Initial values
+        float value = 0.0;
+        float amplitude = 1.;
+        float frequency = FREQUENCY;
+        //
+        // Loop of octaves
+        for (int i = 0; i < OCTAVES; i++) {
+            value += amplitude * perlin(st, frequency);
+            frequency *= LACUNAIRTY;
+            amplitude *= .5;
+        }
+        return value;
+    }
+
+    float map(in float value, in float y) {
+        return  value + (1. - abs(y))/3.;
+    }
+
+    void main() {
+        vec2 st = vec2(vPosition.xy);
+        vec3 color = vec3(map(fbm(st), vPosition.y));
+
+        gl_FragColor = vec4(color,1.0);
+    }
+</script>
+
+<script>
+    const gl_canvas = start_gl("canvas1", getStringFromDOMElement('vs'), getStringFromDOMElement('fs'));
+    start_gl("canvas2", getStringFromDOMElement('vs'), getStringFromDOMElement('fs'));
+    start_gl("canvas3", getStringFromDOMElement('vs'), getStringFromDOMElement('fs'));
+    start_gl("canvas4", getStringFromDOMElement('vs'), getStringFromDOMElement('fs'));
+    dataUrl = function () {
+        gl_update(gl_canvas)
+        var canvas = document.getElementById('canvas1');
+        var dataURL = canvas.toDataURL();
+        console.log(dataURL);
+    }
+</script>
