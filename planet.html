@@ -8,7 +8,7 @@
     </style>
 </head>
 <body>
-    <canvas style="color:#87CEEB" id='canvas_noise' width='600' height='600' hidden>
+    <canvas style="color:#87CEEB" id='canvas_noise' width='800' height='800' hidden>
     </canvas>
 </body>
 <script id="vs" type="x-shader/x-vertex">
@@ -21,86 +21,98 @@
 </script>
 
 <script id="fs" type="x-shader/x-fragment">
-    precision highp float;
+    precision mediump float;
     uniform float uTime;
     varying vec3 vPosition;
     uniform vec3 uCursor;
 
-    #define OCTAVES 8
-    #define FREQUENCY 3.77
-    #define LACUNAIRTY 2.21
+    #define OCTAVES 16
+    #define FREQUENCY 2.
+    #define LACUNAIRTY 1.65
+    #define R_FREQUENCY 1.
+    #define R_LACUNAIRTY 2.
 
-    vec2 randomGradient(in vec2 point) {
-        // Random float. No precomputed gradients mean this works for any number of grid coordinates
-        float random = uTime * sin(point.x * 21942. + point.y * 171324. + 8912.) * cos(point.x * 23157. * point.y * 217832. + 9758.);
-        return vec2(cos(random), sin(random));
+    vec3 random3(vec3 c) {
+        float j = 4096.0*sin(dot(c,vec3(17.0, 59.4, 15.0)));
+        vec3 r;
+        r.z = fract(512.0*j);
+        j *= .125;
+        r.x = fract(512.0*j);
+        j *= .125;
+        r.y = fract(512.0*j);
+        return r-0.5;
     }
 
-    // Computes the dot product of the distance and gradient vectors.
-    float dotGridGradient(vec2 point, vec2 st) {
-        // Get gradient from integer coordinates
-        vec2 gradient = randomGradient(point);
+    const float F3 =  0.3333333;
+    const float G3 =  0.1666667;
 
-        return dot(gradient, st);
+    float simplex3d(vec3 p) {
+        vec3 s = floor(p + dot(p, vec3(F3)));
+        vec3 x = p - s + dot(s, vec3(G3));
+
+        vec3 e = step(vec3(0.0), x - x.yzx);
+        vec3 i1 = e*(1.0 - e.zxy);
+        vec3 i2 = 1.0 - e.zxy*(1.0 - e);
+
+        vec3 x1 = x - i1 + G3;
+        vec3 x2 = x - i2 + 2.0*G3;
+        vec3 x3 = x - 1.0 + 3.0*G3;
+
+        vec4 w, d;
+
+        w.x = dot(x, x);
+        w.y = dot(x1, x1);
+        w.z = dot(x2, x2);
+        w.w = dot(x3, x3);
+
+        w = max(0.6 - w, 0.0);
+
+        d.x = dot(random3(s), x);
+        d.y = dot(random3(s + i1), x1);
+        d.z = dot(random3(s + i2), x2);
+        d.w = dot(random3(s + 1.0), x3);
+
+        w *= w;
+        w *= w;
+        d *= w;
+
+        return dot(d, vec4(52.0));
     }
 
-    // Based on Morgan McGuire @morgan3d
-    // https://www.shadertoy.com/view/4dS3Wd
-    float noise (in vec2 st, in float frequency) {
-        vec2 offset = st + FREQUENCY * 2.;
-        return sin(offset.x * offset.y * FREQUENCY + uTime);
-    }
-
-    float perlin (in vec2 st, in float freq) {
-        // a b <--- Point Layout
-        // c d
-        vec2 a = floor(st * freq);
-        vec2 d = a + vec2(1, 1);
-        vec2 b = a + vec2(1, 0);
-        vec2 c = a + vec2(0, 1);
-        if(a.x == -1. * freq) {
-            a.x = freq;
-            c.x = freq;
-        }
-
-        vec2 distance = fract(st * freq);
-
-        vec2 offset = vec2(freq);
-        float an = dotGridGradient(a, st);
-        float bn = dotGridGradient(b, st);
-        float x1 = mix(an, bn, distance.x);
-
-        float cn = dotGridGradient(c, st);
-        float dn = dotGridGradient(d, st);
-        float x2 = mix(cn, dn, distance.x);
-
-        return mix(x1, x2, distance.y);
-    }
-
-    float fbm (in vec2 st) {
+    float fractal_noise(vec3 p, in float freq, in float lac){
         // Initial values
         float value = 0.0;
         float amplitude = 1.;
-        float frequency = FREQUENCY;
-        //
+        float total_amp = 0.;
+        float frequency = freq;
+
         // Loop of octaves
         for (int i = 0; i < OCTAVES; i++) {
-            value += amplitude * perlin(st, frequency);
-            frequency *= LACUNAIRTY;
+            total_amp += amplitude;
+            value += simplex3d(p * frequency) * amplitude;
+            frequency *= lac;
             amplitude *= .5;
         }
-        return value;
+        return value / total_amp;
     }
 
-    float map(in float value, in float y) {
-        return  value + (1. - abs(y))/3.;
-    }
+    void main()
+    {
+        vec2 p = (vPosition.xy / 2.) + .5;
 
-    void main() {
-        vec2 st = vec2(vPosition.xy);
-        vec3 color = vec3(map(fbm(st), vPosition.y));
+        // ridge shader
+        vec3 rp3 = vec3(p, uTime*.033);
+        float rvalue = fractal_noise(rp3, R_FREQUENCY, R_LACUNAIRTY);
+        rvalue = 1. - min(abs(rvalue), 1.) * 4.;
 
-        gl_FragColor = vec4(color,1.0);
+        //opensimplex shader
+        vec3 p3 = vec3(p, uTime*.025);
+        float value = fractal_noise(p3, FREQUENCY, LACUNAIRTY);
+        value = 0.4 + 0.50*value;
+
+        value = (value * value) + (rvalue * (1. - value));
+        gl_FragColor = vec4(
+        vec3(value), 1.0);
     }
 </script>
 <script type="module" src="./build/three.js"></script>
@@ -129,9 +141,10 @@
     const jimp_data = await Jimp.read(base64_img)
     .then(img => {
         img.color([
-            { apply: 'hue', params: [-90] },
-            { apply: 'lighten', params: [15] },
+            // { apply: 'hue', params: [-90] },
+            { apply: 'lighten', params: [5] },
             { apply: 'xor', params: ['#06D'] }
+            // { apply: 'xor', params: ['#A38'] }
         ]);
 
         // let original = img.clone()
@@ -197,7 +210,7 @@
 
         map: texture,
         displacementMap: displacement,
-        displacementScale: .1,
+        displacementScale: .2,
     });
 
     // material.onBeforeCompile = shader => {
@@ -223,7 +236,7 @@
     light2.position.set( - 100, - 100, - 50 );
     scene.add( light2 );
 
-    scene.add( new THREE.AmbientLight( 0x608f91) );
+    scene.add( new THREE.AmbientLight(0x608f91) );
 
     // const wireframe = new THREE.WireframeGeometry( geometry );
     //
@@ -241,10 +254,10 @@
     function animate(time) {
         time *= 0.001
 
-        mesh.rotation.y += 0.003;
+        mesh.rotation.y += 0.005;
 
-        const canvas = renderer.domElement;
-        uniforms.iResolution.value.set(canvas.width, canvas.height, 1);
+        // const canvas = renderer.domElement;
+        // uniforms.iResolution.value.set(canvas.width, canvas.height, 1);
         uniforms.iTime.value = time;
 
         renderer.render( scene, camera );
